@@ -88,12 +88,12 @@ func (p *Provider) toLibdnsRR(sr spaceshipRecordUnion, zone string) libdns.Recor
 			target = sr.TargetName
 		}
 		return libdns.ServiceBinding{
-			Name:     name,
-			TTL:      ttl,
-			Scheme:   "https",
-			Priority: uint16(sr.SvcPriority),
-			Target:   target,
-			Params:   params,
+			Name:         name,
+			TTL:          ttl,
+			Scheme:       "https",
+			Priority:     uint16(sr.SvcPriority),
+			Target:       target,
+			Params:       params,
 			ProviderData: sr,
 		}
 	}
@@ -106,11 +106,23 @@ func (p *Provider) toLibdnsRR(sr spaceshipRecordUnion, zone string) libdns.Recor
 func (p *Provider) fromLibdnsRR(lr libdns.Record, zone string) *spaceshipRecordUnion {
 	rr := lr.RR()
 	name := rr.Name
+
+	// certmagic passes generic libdns.RR values for ACME challenge records.
+	// Parse known RR types first so TXT/CNAME/etc. are converted into their
+	// typed libdns forms instead of being dropped as unsupported.
+	if raw, ok := lr.(libdns.RR); ok {
+		if parsed, err := raw.Parse(); err == nil {
+			if _, stillRaw := parsed.(libdns.RR); !stillRaw {
+				return p.fromLibdnsRR(parsed, zone)
+			}
+		}
+	}
+
+	// Spaceship API expects the record name relative to the zone
 	if name == "" {
 		name = "@"
-	} else {
-		name = libdns.AbsoluteName(rr.Name, zone)
 	}
+
 	rec := spaceshipRecordUnion{ResourceRecordBase: ResourceRecordBase{Name: name, Type: strings.ToUpper(rr.Type), TTL: int(rr.TTL.Seconds())}}
 
 	// MX handled specially
@@ -157,7 +169,7 @@ func (p *Provider) fromLibdnsRR(lr libdns.Record, zone string) *spaceshipRecordU
 		if strings.ToLower(svc.Scheme) == "https" {
 			rec.Type = "HTTPS"
 			rec.SvcPriority = int(svc.Priority)
-			rec.TargetName = svc.Target  // Use TargetName for API compatibility
+			rec.TargetName = svc.Target // Use TargetName for API compatibility
 			rec.SvcParams = svc.Params.String()
 			return &rec
 		}
@@ -180,4 +192,3 @@ func (p *Provider) fromLibdnsRR(lr libdns.Record, zone string) *spaceshipRecordU
 	}
 	return &rec
 }
-
