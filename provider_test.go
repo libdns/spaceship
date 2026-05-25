@@ -175,6 +175,68 @@ func TestProvider_ConvertFromLibdnsRecord(t *testing.T) {
 	}
 }
 
+func TestProvider_ConvertFromGenericRR(t *testing.T) {
+	provider := NewProviderFromEnv()
+	zone := getTestZone()
+
+	result := provider.fromLibdnsRR(libdns.RR{
+		Name: "_acme-challenge",
+		TTL:  60 * time.Second,
+		Type: "TXT",
+		Data: "token-value",
+	}, zone)
+	if result == nil {
+		t.Fatal("expected generic RR to be converted")
+	}
+	if result.Name != "_acme-challenge" {
+		t.Fatalf("expected relative name, got %q", result.Name)
+	}
+	if result.Type != "TXT" {
+		t.Fatalf("expected TXT type, got %q", result.Type)
+	}
+	if result.Value != "token-value" {
+		t.Fatalf("expected TXT value, got %q", result.Value)
+	}
+	if result.TTL != 60 {
+		t.Fatalf("expected TTL 60, got %d", result.TTL)
+	}
+}
+
+func TestAppendRecords_GenericRRPayload(t *testing.T) {
+	provider := newTestProvider()
+	zone := getTestZone()
+
+	provider.HTTPClient = &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			body, err := io.ReadAll(req.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			var payload struct {
+				Force bool                   `json:"force"`
+				Items []spaceshipRecordUnion `json:"items"`
+			}
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Fatalf("unmarshal payload: %v\nbody=%s", err, string(body))
+			}
+			if len(payload.Items) != 1 {
+				t.Fatalf("expected one item, got %d in %s", len(payload.Items), string(body))
+			}
+			if payload.Items[0].Type != "TXT" || payload.Items[0].Name != "_acme-challenge" || payload.Items[0].Value != "token-value" {
+				t.Fatalf("unexpected item payload: %#v", payload.Items[0])
+			}
+			return &http.Response{StatusCode: 204, Body: io.NopCloser(strings.NewReader(""))}, nil
+		}),
+	}
+
+	_, err := provider.AppendRecords(context.Background(), zone, []libdns.Record{
+		libdns.RR{Name: "_acme-challenge", TTL: 60 * time.Second, Type: "TXT", Data: "token-value"},
+	})
+	if err != nil {
+		t.Fatalf("AppendRecords failed: %v", err)
+	}
+}
+
 func TestDoRequest_HeadersAndBody(t *testing.T) {
 	provider := newTestProvider()
 
@@ -348,11 +410,14 @@ func TestConvertFromLibdnsRecord_TypedRecords(t *testing.T) {
 		t.Fatalf("SRV conversion failed: %#v", rec)
 	}
 
-	// Test that textual RR records are unsupported (return nil)
+	// Generic RR values should be parsed into their typed representations.
 	textualRR := libdns.RR{Name: "_sip._tcp", TTL: 3600 * time.Second, Type: "SRV", Data: fmt.Sprintf("10 20 5060 %s", fmt.Sprintf("sip.%s", zone))}
 	textualRec := provider.fromLibdnsRR(textualRR, zone)
-	if textualRec != nil {
-		t.Fatalf("Textual RR records should return nil (unsupported), got: %#v", textualRec)
+	if textualRec == nil {
+		t.Fatal("generic SRV RR should be converted")
+	}
+	if textualRec.Priority != 10 || textualRec.Weight != 20 || textualRec.PortInt != 5060 || textualRec.Target != fmt.Sprintf("sip.%s", zone) {
+		t.Fatalf("generic SRV conversion failed: %#v", textualRec)
 	}
 
 	// HTTPS (using typed libdns.ServiceBinding with https scheme)
