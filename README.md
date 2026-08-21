@@ -1,9 +1,11 @@
 Spaceship for [`libdns`](https://github.com/libdns/libdns)
 =======================
 
-[![Go Reference](https://pkg.go.dev/badge/test.svg)](https://pkg.go.dev/github.com/Redth/libdns-spaceship)
+[![Go Reference](https://pkg.go.dev/badge/github.com/empressmarissa/libdns_spaceship.svg)](https://pkg.go.dev/github.com/empressmarissa/libdns_spaceship)
 
-This package implements the [libdns interfaces](https://github.com/libdns/libdns) for Spaceship, allowing you to manage DNS records.
+This maintained fork implements the [libdns interfaces](https://github.com/libdns/libdns) for Spaceship, allowing you to manage DNS records. It addresses the upstream project's conversion and ownership-name gaps so Spaceship, libdns, and CertMagic can be used together.
+
+The module path is `github.com/empressmarissa/libdns_spaceship`.
 
 ## Configuration
 
@@ -61,9 +63,10 @@ package main
 
 import (
     "context"
+    "net/netip"
     "time"
     
-    "github.com/Redth/libdns-spaceship"
+    libdnsspaceship "github.com/empressmarissa/libdns_spaceship"
     "github.com/libdns/libdns"
 )
 
@@ -96,6 +99,20 @@ func main() {
     }
 }
 ```
+
+### Using the maintained fork with Caddy
+
+A maintained Caddy adapter should import this module directly:
+`github.com/empressmarissa/libdns_spaceship`. This keeps the final Caddy build
+free of module replacement directives.
+
+### Local development
+
+The repository has no required external services for unit checks. With Docker
+installed, run `make docker-check` (Go 1.27) or `make docker-check-min` (Go
+1.18). Native `make check` runs the same formatting, vet, and unit-test checks
+when Go is installed locally. Live Spaceship tests are opt-in and are never
+run by these checks or by CI.
 
 ## Supported Record Types
 

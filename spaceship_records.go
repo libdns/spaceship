@@ -10,7 +10,7 @@ import (
 // (this is intentionally minimal; each specific record type augments this with
 // fields appropriate for that type).
 type ResourceRecordBase struct {
-	Type string `json:"type"`
+	Type string `json:"type,omitempty"`
 	Name string `json:"name"`
 	TTL  int    `json:"ttl,omitempty"`
 }
@@ -33,17 +33,17 @@ type spaceshipRecordUnion struct {
 	Weight     int         `json:"weight,omitempty"`
 	Port       interface{} `json:"port,omitempty"`
 	// PortInt is an internal convenience, not serialized
-	PortInt         int    `json:"-"`
-	Target          string `json:"target,omitempty"`
-	Nameserver      string `json:"nameserver,omitempty"`
-	Pointer         string `json:"pointer,omitempty"`
-	Flag            *int   `json:"flag,omitempty"`
-	Tag string `json:"tag,omitempty"`
+	PortInt    int    `json:"-"`
+	Target     string `json:"target,omitempty"`
+	Nameserver string `json:"nameserver,omitempty"`
+	Pointer    string `json:"pointer,omitempty"`
+	Flag       *int   `json:"flag,omitempty"`
+	Tag        string `json:"tag,omitempty"`
 	// HTTPS/ServiceBinding fields
-	SvcPriority     int    `json:"svcPriority,omitempty"`
-	SvcTarget       string `json:"svcTarget,omitempty"`
-	TargetName      string `json:"targetName,omitempty"`  // Alternative field name used by API
-	SvcParams       string `json:"svcParams,omitempty"`
+	SvcPriority int    `json:"svcPriority,omitempty"`
+	SvcTarget   string `json:"svcTarget,omitempty"`
+	TargetName  string `json:"targetName,omitempty"` // Alternative field name used by API
+	SvcParams   string `json:"svcParams,omitempty"`
 }
 
 // UnmarshalJSON implements custom unmarshalling to handle mixed-type 'port' fields and
