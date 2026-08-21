@@ -58,6 +58,9 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 // AppendRecords adds records to the zone. It returns the records that were added.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if len(records) == 0 {
+		return []libdns.Record{}, nil
+	}
 	if err := p.validateCredentials(); err != nil {
 		return nil, err
 	}
@@ -66,10 +69,12 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	zone = strings.TrimSuffix(zone, ".")
 
 	var items []spaceshipRecordUnion
-	for _, r := range records {
-		if item := p.fromLibdnsRR(r, zone); item != nil {
-			items = append(items, *item)
+	for i, r := range records {
+		item, err := p.fromLibdnsRR(r, zone)
+		if err != nil {
+			return nil, fmt.Errorf("record %d (%s): %w", i, recordTypeForError(r), err)
 		}
+		items = append(items, *item)
 	}
 
 	payload := map[string]interface{}{
@@ -99,16 +104,21 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 
 // SetRecords sets the records in the zone by saving the provided records (force update).
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if len(records) == 0 {
+		return []libdns.Record{}, nil
+	}
 	if err := p.validateCredentials(); err != nil {
 		return nil, err
 	}
 
 	zone = strings.TrimSuffix(zone, ".")
 	var items []spaceshipRecordUnion
-	for _, r := range records {
-		if item := p.fromLibdnsRR(r, zone); item != nil {
-			items = append(items, *item)
+	for i, r := range records {
+		item, err := p.fromLibdnsRR(r, zone)
+		if err != nil {
+			return nil, fmt.Errorf("record %d (%s): %w", i, recordTypeForError(r), err)
 		}
+		items = append(items, *item)
 	}
 	payload := map[string]interface{}{
 		"force": true,
@@ -133,17 +143,19 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 
 // DeleteRecords deletes the specified records from the zone. It returns the records that were deleted.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	if len(records) == 0 {
+		return []libdns.Record{}, nil
+	}
 	if err := p.validateCredentials(); err != nil {
 		return nil, err
 	}
 
 	zone = strings.TrimSuffix(zone, ".")
 	var items []spaceshipRecordUnion
-	for _, rec := range records {
-		item := p.fromLibdnsRR(rec, zone)
-		if item == nil {
-			rr := rec.RR()
-			return nil, fmt.Errorf("unsupported record type for deletion: %s", rr.Type)
+	for i, rec := range records {
+		item, err := p.fromLibdnsDeleteRR(rec, zone)
+		if err != nil {
+			return nil, fmt.Errorf("record %d (%s): %w", i, recordTypeForError(rec), err)
 		}
 		items = append(items, *item)
 	}
@@ -158,6 +170,12 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	return records, nil
 }
 
+func recordTypeForError(record libdns.Record) string {
+	if isNilRecord(record) {
+		return "<nil>"
+	}
+	return strings.ToUpper(strings.TrimSpace(record.RR().Type))
+}
 
 // Interface guards
 var (
