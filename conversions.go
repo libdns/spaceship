@@ -101,17 +101,29 @@ func (p *Provider) toLibdnsRR(sr spaceshipRecordUnion, zone string) libdns.Recor
 	return nil
 }
 
+// minTTL is the lowest TTL the Spaceship API accepts.
+const minTTL = 60
+
 // fromLibdnsRR converts a libdns.Record into a spaceshipRecordUnion suitable for create/update
 // Returns nil for unsupported record types
 func (p *Provider) fromLibdnsRR(lr libdns.Record, zone string) *spaceshipRecordUnion {
+	// Generic records (libdns.RR, as the ACME DNS-01 solver sends them) become their typed form first.
+	if generic, ok := lr.(libdns.RR); ok {
+		if typed, err := generic.Parse(); err == nil {
+			lr = typed
+		}
+	}
 	rr := lr.RR()
-	name := rr.Name
+	// The Spaceship API names records relative to the zone ("@", "www", "_acme-challenge").
+	name := libdns.RelativeName(rr.Name, zone)
 	if name == "" {
 		name = "@"
-	} else {
-		name = libdns.AbsoluteName(rr.Name, zone)
 	}
-	rec := spaceshipRecordUnion{ResourceRecordBase: ResourceRecordBase{Name: name, Type: strings.ToUpper(rr.Type), TTL: int(rr.TTL.Seconds())}}
+	ttl := int(rr.TTL.Seconds())
+	if ttl < minTTL {
+		ttl = minTTL
+	}
+	rec := spaceshipRecordUnion{ResourceRecordBase: ResourceRecordBase{Name: name, Type: strings.ToUpper(rr.Type), TTL: ttl}}
 
 	// MX handled specially
 	if mx, ok := lr.(libdns.MX); ok {
