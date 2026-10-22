@@ -161,8 +161,9 @@ func TestProvider_ConvertFromLibdnsRecord(t *testing.T) {
 	}
 
 	result := provider.fromLibdnsRR(addr, zone)
-	if result.Name != fmt.Sprintf("test.%s", zone) {
-		t.Errorf("Expected full name, got %s", result.Name)
+	// The Spaceship API takes names relative to the zone ("test", "@"); it rejects FQDNs with 422.
+	if result.Name != "test" {
+		t.Errorf("Expected relative name test, got %s", result.Name)
 	}
 	if result.Type != "A" {
 		t.Errorf("Expected type A, got %s", result.Type)
@@ -348,11 +349,14 @@ func TestConvertFromLibdnsRecord_TypedRecords(t *testing.T) {
 		t.Fatalf("SRV conversion failed: %#v", rec)
 	}
 
-	// Test that textual RR records are unsupported (return nil)
+	// Generic (textual) RR records are parsed into their typed form and convert the same way.
 	textualRR := libdns.RR{Name: "_sip._tcp", TTL: 3600 * time.Second, Type: "SRV", Data: fmt.Sprintf("10 20 5060 %s", fmt.Sprintf("sip.%s", zone))}
 	textualRec := provider.fromLibdnsRR(textualRR, zone)
-	if textualRec != nil {
-		t.Fatalf("Textual RR records should return nil (unsupported), got: %#v", textualRec)
+	if textualRec == nil {
+		t.Fatalf("Textual RR records should be parsed and converted, got nil")
+	}
+	if textualRec.Service != "_sip" || textualRec.Protocol != "_tcp" || textualRec.Priority != 10 || textualRec.Weight != 20 || textualRec.PortInt != 5060 {
+		t.Fatalf("Textual SRV conversion failed: %#v", textualRec)
 	}
 
 	// HTTPS (using typed libdns.ServiceBinding with https scheme)
@@ -380,7 +384,7 @@ func TestConvertFromLibdnsRecord_TypedRecords(t *testing.T) {
 	if !strings.Contains(httpsRec.SvcParams, "alpn=h2,h3") || !strings.Contains(httpsRec.SvcParams, "port=8443") {
 		t.Fatalf("Expected params to contain alpn and port, got: %s", httpsRec.SvcParams)
 	}
-	expectedName := fmt.Sprintf("test.%s", zone)
+	expectedName := "test"
 	if httpsRec.Name != expectedName {
 		t.Fatalf("Expected name %s, got %s", expectedName, httpsRec.Name)
 	}
